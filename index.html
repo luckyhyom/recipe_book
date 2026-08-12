@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<!--
+  메뉴 추가/수정 가이드
+
+  편집 위치: 아래쪽 `const MENU = [ ... ];` 배열 맨 끝에 추가
+
+  [예시]
+    {
+        name: "타로 밀크티", // 제품명
+        image_url: "", // 이미지 링크 (없어도 됨)
+        category: "milktea", // milktea | smoothie | crush | coffee | tea | ade
+        steps: [
+            {
+                description: "", // 제조 방법 설명
+                type: "manual", // manual(직접) | machine(기계 자동 추출)
+                ingredients: [
+                    {
+                        name: "", // 재료명
+                        description: "", // 재료양
+                    }
+                ],
+            }
+        ]
+    }
+
+  [카테고리 추가]
+  아래 세 곳을 같이 수정할 것. 영문 키(xxx)는 카테고리 뜻을 담아 짓는다. (tea, coffee)
+
+  1) :root  -- 색 토큰 두 개 추가 (soft = 배경, 기본 = 글자)
+     --cat-xxx:#진한색;
+     --cat-xxx-soft:#연한색;
+
+  2) .tag 규칙 -- 다른 .tag 줄 옆에 추가
+     .tag.xxx{ background:var(--cat-xxx-soft); color:var(--cat-xxx); }
+
+  3) CATEGORY_LABEL -- 영문 키와 화면에 보일 한글 이름을 연결 (키 순서 = 칩 순서)
+     xxx: "새카테고리"
+-->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 종이색 고정 화면이라 다크모드로 강제 변환되지 않게 명시. theme-color 는 폰 주소창 색 -->
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#F2ECDD">
+<title>Recipe Book</title>
+<!-- 스타일시트는 googleapis, 폰트 파일은 gstatic 에서 온다. 둘 다 미리 연결해 둔다 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F2ECDD;
+    --paper-raised:#FBF8F0;
+    --ink:#2A211A;
+    --ink-soft:#6B6053;
+    --line:#D8CDB4;
+    /* 카테고리 배지 색 (음료 이름이 아니라 카테고리 기준) */
+    --cat-milktea:#7C6A9C;
+    --cat-milktea-soft:#EAE4F1;
+    --cat-smoothie:#6B4226;
+    --cat-smoothie-soft:#EEE1D6;
+    --cat-crush:#3F7C8C;
+    --cat-crush-soft:#DCEBEF;
+    --cat-tea:#748A5C;
+    --cat-tea-soft:#E4EBDB;
+    --cat-coffee:#8A5A1E;
+    --cat-coffee-soft:#F3E3C9;
+    --cat-ade:#A8422E;
+    --cat-ade-soft:#F6D9D2;
+    /* 스텝 유형 색 (배지 + 범례 공용) */
+    --step-manual:#F4CCCC;
+    --step-manual-ink:#8A3B3B;
+    --step-machine:#D9D9D9;
+    --step-machine-ink:#4A4A4A;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background:var(--paper);
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(42,33,26,0.06) 1px, transparent 0);
+    background-size: 14px 14px;
+    color:var(--ink);
+    font-family:'IBM Plex Sans KR', sans-serif;
+    display:flex;
+    justify-content:center;
+    min-height:100vh;
+  }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+  .app{
+    width:100%;
+    max-width:440px;
+    min-height:100vh;
+    background:var(--paper);
+    padding:20px 16px 60px;
+  }
+  header{
+    padding:4px 2px 18px;
+  }
+  h1{
+    margin:4px 0 2px;
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:-0.02em;
+  }
+  .search-wrap{
+    margin-top:16px;
+    position:relative;
+  }
+  .search-wrap input{
+    width:100%;
+    padding:12px 14px 12px 38px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    background:var(--paper-raised);
+    font-family:'IBM Plex Sans KR', sans-serif;
+    font-size:15px;
+    color:var(--ink);
+    outline:none;
+    appearance:none;   /* type="search" 의 브라우저 기본 외형 제거 */
+  }
+  /* 위 appearance:none 이 Safari 에서 지우기(✕) 버튼까지 없애므로 되살린다 */
+  .search-wrap input::-webkit-search-cancel-button{
+    -webkit-appearance:searchfield-cancel-button;
+  }
+  .search-wrap input:focus{
+    border-color:var(--cat-milktea);
+  }
+  .search-wrap svg{
+    position:absolute;
+    left:12px; top:50%; transform:translateY(-50%);
+    opacity:0.5;
+  }
+  .chips{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+    overflow-x:auto;
+    padding-bottom:2px;
+  }
+  .chip{
+    flex:0 0 auto;
+    padding:7px 14px;
+    border-radius:999px;
+    border:1.5px solid var(--line);
+    background:var(--paper-raised);
+    font-size:13px;
+    font-weight:500;
+    color:var(--ink-soft);
+    cursor:pointer;
+    white-space:nowrap;
+    user-select:none;
+  }
+  .chip.active{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:var(--paper);
+  }
+  .count-row{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin:18px 2px 10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    letter-spacing:0.06em;
+  }
+  .list{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .card{
+    background:var(--paper-raised);
+    border:1.5px solid var(--line);
+    border-radius:14px;
+    overflow:hidden;
+  }
+  .card-head{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:14px;
+    cursor:pointer;
+  }
+  /* 썸네일: 자리표시 위에 이미지를 덮어씌운다.
+     이미지가 없으면(또는 불러오기에 실패하면) 자리표시가 그대로 보인다 */
+  .thumb{
+    flex:0 0 auto;
+    position:relative;
+    overflow:hidden;
+    width:52px; height:52px;
+    border-radius:10px;
+    border:1.5px dashed var(--line);
+    display:flex; align-items:center; justify-content:center;
+    font-size:9px; color:var(--ink-soft);
+    text-align:center;
+    line-height:1.3;
+    background:repeating-linear-gradient(135deg, rgba(42,33,26,0.03) 0 6px, transparent 6px 12px);
+  }
+  /* 이미지가 있으면 자리표시(점선·빗금·글자)를 모두 없앤다.
+     특히 글자는 아래 multiply 때문에 이미지의 흰 배경으로 비쳐 보이므로 반드시 숨긴다. */
+  /* :has() 로 DOM 을 직접 읽으므로 "이미지가 있다"는 표시용 클래스가 따로 없다.
+     불러오기 실패로 <img> 가 제거되면 자리표시가 저절로 돌아온다. */
+  .thumb:has(.thumb-img){ border:none; background:none; }
+  .thumb:has(.thumb-img) .thumb-ph{ display:none; }
+  .thumb-ph{ align-self:center; }
+  .thumb-img{
+    position:absolute; top:0; left:0;
+    width:100%; height:100%;
+    object-fit:contain;
+    /* 원본이 흰 배경이어도 multiply 로 겹치면 카드 배경색과 같아져 경계가 보이지 않는다. */
+    mix-blend-mode:multiply;
+  }
+  .head-text{ flex:1; min-width:0; }
+  .name{
+    font-size:16px;
+    font-weight:600;
+    letter-spacing:-0.01em;
+  }
+  .tag-row{
+    margin-top:4px;
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+  .tag{
+    font-size:10.5px;
+    font-weight:600;
+    padding:2px 7px;
+    border-radius:5px;
+  }
+  .tag.milktea{ background:var(--cat-milktea-soft); color:var(--cat-milktea); }
+  .tag.smoothie{ background:var(--cat-smoothie-soft); color:var(--cat-smoothie); }
+  .tag.crush{ background:var(--cat-crush-soft); color:var(--cat-crush); }
+  .tag.tea{ background:var(--cat-tea-soft); color:var(--cat-tea); }
+  .tag.coffee{ background:var(--cat-coffee-soft); color:var(--cat-coffee); }
+  .tag.ade{ background:var(--cat-ade-soft); color:var(--cat-ade); }
+  .step-count{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+  }
+  .chevron{
+    flex:0 0 auto;
+    transition:transform 0.2s ease;
+    opacity:0.55;
+  }
+  .card.open .chevron{ transform:rotate(180deg); }
+  .card-body{
+    max-height:0;
+    overflow:hidden;
+    transition:max-height 0.25s ease;
+  }
+  .card.open .card-body{
+    max-height:2000px;
+  }
+  .steps{
+    padding:0 14px 16px;
+    border-top:1px dashed var(--line);
+  }
+  .step{
+    padding:12px 0;
+    border-bottom:1px dashed var(--line);
+  }
+  .step:last-child{ border-bottom:none; padding-bottom:2px; }
+  .step-top{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .step-no{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    font-weight:700;
+    color:var(--paper);
+    background:var(--ink);
+    border-radius:5px;
+    padding:1px 6px;
+  }
+  .step-type{
+    font-size:10.5px;
+    font-weight:700;
+    padding:2px 8px;
+    border-radius:999px;
+    letter-spacing:0.02em;
+  }
+  .step-type.manual{
+    background:var(--step-manual);
+    color:var(--step-manual-ink);
+  }
+  .step-type.machine{
+    background:var(--step-machine);
+    color:var(--step-machine-ink);
+  }
+  .legend{
+    display:flex;
+    gap:14px;
+    margin:14px 2px 0;
+  }
+  .legend-item{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:11.5px;
+    color:var(--ink-soft);
+  }
+  .legend-dot{
+    width:10px; height:10px;
+    border-radius:3px;
+  }
+  .legend-dot.manual{ background:var(--step-manual); }
+  .legend-dot.machine{ background:var(--step-machine); }
+  .step-method{
+    font-size:13.5px;
+    font-weight:600;
+    white-space:pre-line;
+  }
+  .step-materials{
+    margin-top:6px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .ingredient{
+    font-size:12px;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:3px 8px;
+    white-space:pre-line;
+  }
+  .variants{
+    margin-top:8px;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .variant-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    font-size:12.5px;
+    padding:4px 8px;
+    background:var(--paper);
+    border-radius:6px;
+  }
+  .variant-label{ color:var(--ink-soft); }
+  .variant-value{
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+    text-align:right;
+  }
+  .empty{
+    text-align:center;
+    padding:40px 10px;
+    color:var(--ink-soft);
+    font-size:13px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Recipe Book</h1>
+    <search class="search-wrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2A211A" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search" type="search" placeholder="메뉴명 검색"
+             autocomplete="off" autocapitalize="off" enterkeyhint="search">
+    </search>
+    <div class="chips" id="chips"></div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot manual"></span>직접</div>
+      <div class="legend-item"><span class="legend-dot machine"></span>기계 추출</div>
+    </div>
+  </header>
+
+  <div class="count-row">
+    <span id="countLabel">0 MENUS</span>
+    <span>TAP CARD TO EXPAND</span>
+  </div>
+
+  <div class="list" id="list"></div>
+</div>
+
+<script>
+/* 메뉴 추가/수정 방법은 파일 맨 위 주석 참고 */
+const MENU = [
+    {
+        name: "딸기 밀크티",
+        image_url: "",
+        category: "milktea",
+        steps: [
+            {
+                description: "컵",
+                type: "manual",
+                ingredients: [
+                    {
+                        name: "딸기 시럽",
+                        description: "L: 10g, J: 20g",
+                    }
+                ],
+            },
+            {
+                description: "컵",
+                type: "machine",
+                ingredients: [
+                    {
+                        name: "우유",
+                        description: "L: 100ml, J: 200ml",
+                    },
+                ],
+            },
+            {
+                description: "상단 토핑",
+                type: "manual",
+                ingredients: [
+                    {
+                        name: "크림",
+                        description: "컵 상단선에 맞춰서",
+                    },
+                    {
+                        name: "딸기 슬라이스",
+                        description: "L: 1스푼, J: 2스푼",
+                    },
+                ],
+            },
+        ]
+    },
+    {
+        name: "아메리카노 (ICE)",
+        image_url: "",
+        category: "coffee",
+        steps: [
+            {
+                description: "컵",
+                type: "manual",
+                ingredients: [
+                    {
+                        name: "얼음",
+                        description: "컵 가득",
+                    }
+                ],
+            },
+            {
+                description: "커피 머신",
+                type: "machine",
+                ingredients: [
+                    {
+                        name: "샷",
+                        description: "L: 1샷, J: 2샷",
+                    },
+                ],
+            },
+            {
+                description: "컵",
+                type: "manual",
+                ingredients: [
+                    {
+                        name: "물",
+                        description: "컵 가득",
+                    },
+                ],
+            },
+        ]
+    }
+]
+
+// category 값은 그대로 CSS 클래스(.tag.milktea)로 쓰이므로 변환이 없다.
+// 이 맵은 화면에 보여줄 한글 이름만 담당하며, 키 순서가 곧 칩 순서다.
+const CATEGORY_LABEL = {
+  milktea:  "밀크티",
+  smoothie: "스무디",
+  crush:    "크러쉬",
+  coffee:   "커피",
+  tea:      "티",
+  ade:      "에이드"
+};
+
+const listEl = document.getElementById('list');
+const searchEl = document.getElementById('search');
+const chipsEl = document.getElementById('chips');
+const countEl = document.getElementById('countLabel');
+
+let activeCategory = "all";
+
+// 칩은 카테고리가 고정이라 한 번만 만든다. 이후엔 active 클래스만 옮긴다.
+function buildChips(){
+  // CATEGORY_LABEL 의 키 순서를 따르되, 실제로 쓰인 카테고리만 칩으로 만든다.
+  const used = new Set(MENU.map(d => d.category));
+  const cats = ["all", ...Object.keys(CATEGORY_LABEL).filter(k => used.has(k))];
+  chipsEl.innerHTML = cats.map(c =>
+    `<div class="chip ${c === activeCategory ? 'active' : ''}" data-cat="${c}">` +
+    `${c === "all" ? "전체" : (CATEGORY_LABEL[c] || c)}</div>`
+  ).join('');
+}
+
+// 썸네일 — image_url 이 있으면 자리표시 위에 이미지를 덮고, 없으면(null) 자리표시만 남긴다.
+// 주소가 죽어 있으면 <img> 를 지우기만 하면 된다. 자리표시 복귀는 CSS 의 :has() 가 맡는다.
+function renderThumb(d){
+  return `<div class="thumb">` +
+    `<span class="thumb-ph">제품<br>이미지</span>` +
+    (d.image_url
+      ? `<img class="thumb-img" src="${d.image_url}" alt="" loading="lazy" onerror="this.remove()">`
+      : '') +
+    `</div>`;
+}
+
+// description 이 비면 계량 없는 재료 -> 칩,
+// 있으면 "재료명 ... 계량" 한 줄.
+function renderIngredient(ing){
+  if(!ing.description){
+    return `<span class="ingredient">${ing.name}</span>`;
+  }
+  return `
+    <div class="variant-row">
+      <span class="variant-label">${ing.name}</span>
+      <span class="variant-value mono">${ing.description}</span>
+    </div>`;
+}
+
+function render(){
+  const q = searchEl.value.trim().toLowerCase();
+  let menus = MENU.filter(d => activeCategory === "all" || d.category === activeCategory);
+  menus = menus.filter(d => d.name.toLowerCase().includes(q));
+  menus = menus.sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+
+  countEl.textContent = `${menus.length} MENU${menus.length !== 1 ? 'S' : ''}`;
+
+  if(menus.length === 0){
+    listEl.innerHTML = `<div class="empty">일치하는 메뉴가 없어요</div>`;
+    return;
+  }
+
+  listEl.innerHTML = menus.map(d => {
+    // 스텝 번호는 배열 순서에서 계산한다. (데이터에 따로 적지 않는다)
+    const stepsHtml = d.steps.map((s, i) => {
+      const unmeasured = s.ingredients.filter(it => !it.description);
+      const measured = s.ingredients.filter(it => it.description);
+      return `
+      <div class="step">
+        <div class="step-top">
+          <span class="step-no">${String(i + 1).padStart(2,'0')}</span>
+          <span class="step-method">${s.description}</span>
+          <span class="step-type ${s.type}">${s.type === 'manual' ? '직접' : '기계'}</span>
+        </div>
+        ${unmeasured.length ? `
+          <div class="step-materials">
+            ${unmeasured.map(renderIngredient).join('')}
+          </div>` : ''}
+        ${measured.length ? `
+          <div class="variants">
+            ${measured.map(renderIngredient).join('')}
+          </div>` : ''}
+      </div>
+    `;
+    }).join('');
+
+    return `
+      <div class="card">
+        <div class="card-head">
+          ${renderThumb(d)}
+          <div class="head-text">
+            <div class="name">${d.name}</div>
+            <div class="tag-row">
+              <span class="tag ${d.category}">${CATEGORY_LABEL[d.category] || d.category}</span>
+              <span class="step-count">${d.steps.length} STEPS</span>
+            </div>
+          </div>
+          <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2A211A" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+        <div class="card-body">
+          <div class="steps">${stepsHtml}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// 목록과 칩은 다시 그려질 때 요소가 통째로 교체되므로,
+// 리스너는 개별 요소가 아니라 바깥 상자에 한 번만 단다.
+
+listEl.addEventListener('click', e => {
+  const head = e.target.closest('.card-head');
+  if(head) head.parentElement.classList.toggle('open');
+});
+
+chipsEl.addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  if(!chip) return;
+  activeCategory = chip.dataset.cat;
+  chipsEl.querySelectorAll('.chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.cat === activeCategory));
+  render();
+});
+
+searchEl.addEventListener('input', render);
+
+buildChips();
+render();
+</script>
+</body>
+</html>
